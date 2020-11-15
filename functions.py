@@ -17,11 +17,11 @@ chunksize=1000000
 
 # RQ1-1: plot the average number of operations within a session
 def avg_user_operation():
-    cols = ['event_type','user_id']
+    cols = ['event_type','user_session']
     df = pd.read_csv(filename,
                      usecols=cols)
 
-    count = df.groupby(['user_id','event_type']).size()
+    count = df.groupby(['user_session','event_type']).size()
     count = count.unstack(fill_value=0).stack().to_frame('count').reset_index()
     avg = count[['event_type','count']].groupby('event_type').mean()
 
@@ -39,17 +39,14 @@ def average_views_before_cart():
 
     df = pd.read_csv(filename,
                      dtype=dtypes,
-                     usecols=cols,
-                     nrows=50000000)
+                     usecols=cols)
 
     df = df[df.event_type!='purchase']
     df['row'] = np.arange(len(df))
     
     cart_df = df[df.event_type=='cart'].groupby(['user_id','product_id'], as_index=False).agg({'row':'min'})
-    cart_df.set_index(['product_id','user_id'])
     
     view_df = df[df.event_type=='view'].drop('event_type',axis=1)
-    view_df.set_index(['product_id','user_id'])
     
     merged = view_df.merge(cart_df, on=['product_id','user_id'], suffixes=['','_cart'])
     count = merged[merged.row < merged.row_cart].groupby(['product_id','user_id']).size().to_frame()
@@ -227,51 +224,33 @@ def Totall_Brand_Sales(brand_name):
     print("November: %.2f" % df2.price.sum(),"\n")
 
 def top3lost():
-
-    dtypes={'event_type':'category',
-        'brand' : 'category',
-        'price':float}
-
     columns=['brand','price','event_type']
 
-    october_chunks = pd.read_csv(october_filename,
+    october = pd.read_csv(october_filename,
                      dtype=dtypes,
-                     usecols=columns,
-                     chunksize=chunksize)
+                     usecols=columns)
+    
+    october = october[october.event_type=='purchase']
+    october = october.drop('event_type',axis=1)
 
-    november_chunks = pd.read_csv(november_filename,
+    november = pd.read_csv(november_filename,
                      dtype=dtypes,
-                     usecols=columns,
-                     chunksize=chunksize)
-    processed_list1 = []
-    processed_list2 = []
-    
-    for chunk in october_chunks:
-        chunk_brand = (chunk.event_type=='purchase')
-        chunk = chunk[chunk_brand]
-        processed_list1.append(chunk)
-        
-    df1 = pd.concat(processed_list1)
-    
-    for chunk in november_chunks:
-        chunk_brand = (chunk.event_type=='purchase')
-        chunk = chunk[chunk_brand]
-        processed_list2.append(chunk)
+                     usecols=columns)
 
-    df2 = pd.concat(processed_list2)
+    november = november[november.event_type=='purchase']
+    november = november.drop('event_type',axis=1)
 
-    income_Oct=df1.groupby(['brand']).price.sum()
-    income_Nov=df2.groupby(['brand']).price.sum()
+    income_Oct = october.groupby(['brand']).price.sum()
+    income_Nov = november.groupby(['brand']).price.sum()
 
-    lost=(income_Nov-income_Oct)/income_Oct
-    lost=lost.sort_values()
+    lost = (income_Nov-income_Oct)/income_Oct
+    lost = lost.sort_values(ascending=False)
     lost.index[0:3]
 
     for i in range(3):
         bn=lost.index[i]
         percentage=abs(lost[i])*100 
         print("brand '{}' lost {:.2f} % between October and November".format(bn,percentage))
-    return
 
 
 # RQ5
