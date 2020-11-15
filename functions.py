@@ -33,27 +33,27 @@ def avg_user_operation():
     plt.set_ylabel(ylabel)
 
 
-# RQ1-2 returns average number of times a user views a product before buying it
-def average_view_before_buy(chunksize=chunksize):
-    cols = ['user_id','user_session','event_type','event_time']
+# RQ1-2 returns average number of times a user views a product before adding it to the cart
+def average_views_before_cart():
+    cols=['user_id','product_id','event_type']
 
-    chunks = pd.read_csv(filename,
-                         dtype=dtypes,
-                         usecols=cols,
-                         chunksize=chunksize)
+    df = pd.read_csv(filename,
+                     dtype=dtypes,
+                     usecols=cols,
+                     nrows=50000000)
 
-    processed = []
-
-    for df in chunks:
-        # filter sessions with a cart event
-        sessions = df[df.event_type=='cart'].user_session
-        df = df[df.user_session.isin(sessions)]
-        df.event_time = pd.to_datetime(df.event_time, infer_datetime_format=True)    
-        processed.append(df)
-
-    df = pd.concat(processed).set_index(['user_id','user_session'])
-    df = df.groupby(['user_id','user_session']).apply(lambda x:len(x[(x.event_type=='view') & (x.event_time < (x[x.event_type=='cart'].event_time.min()))]))
-    return df.groupby('user_id').mean().mean()
+    df = df[df.event_type!='purchase']
+    df['row'] = np.arange(len(df))
+    
+    cart_df = df[df.event_type=='cart'].groupby(['user_id','product_id'], as_index=False).agg({'row':'min'})
+    cart_df.set_index(['product_id','user_id'])
+    
+    view_df = df[df.event_type=='view'].drop('event_type',axis=1)
+    view_df.set_index(['product_id','user_id'])
+    
+    merged = view_df.merge(cart_df, on=['product_id','user_id'], suffixes=['','_cart'])
+    count = merged[merged.row < merged.row_cart].groupby(['product_id','user_id']).size().to_frame()
+    return count.groupby('user_id').mean().mean()
 
 
 # RQ1-3 returns the probability of purchase of a product put in the cart
@@ -182,9 +182,9 @@ def listofhigh_average():
 
     df = pd.concat(processed_list).set_index(["category_code",'brand'])
 
-    df.groupby(['category_code','brand']).price.max().sort_values()
+    brand_sorted = df.groupby(['category_code','brand']).price.max().sort_values().to_frame('price')
     
-    return 
+    return brand_sorted
 
 # RQ4
 
@@ -222,8 +222,9 @@ def Totall_Brand_Sales(brand_name):
         processed_list2.append(chunk)
     df2 = pd.concat(processed_list2)
 
-    return print("totall sale of {} in October is :{} and in November is :{}".format(brand_name,
-                                                                                     df1.price.sum() , df2.price.sum()))
+    print("Total sale of ",brand_name,":")
+    print("October: %.2f" % df1.price.sum())
+    print("November: %.2f" % df2.price.sum(),"\n")
 
 def top3lost():
 
